@@ -1,10 +1,10 @@
 package gui;
 
-import java.awt.Dimension;
-import java.awt.Toolkit;
-import java.awt.event.KeyEvent;
-import java.awt.event.WindowAdapter;
-import java.awt.event.WindowEvent;
+import java.awt.*;
+import java.awt.event.*;
+import java.io.*;
+import java.util.HashSet;
+
 
 import javax.swing.*;
 
@@ -17,6 +17,8 @@ import log.Logger;
  */
 public class MainApplicationFrame extends JFrame {
     private final JDesktopPane desktopPane = new JDesktopPane();
+    private Settings settings;
+    private File file = new File(System.getProperty("user.home") + "/Settings.txt");
 
     public MainApplicationFrame() {
         //Make the big window be indented 50 pixels from each edge
@@ -29,7 +31,6 @@ public class MainApplicationFrame extends JFrame {
 
         setContentPane(desktopPane);
 
-
         LogWindow logWindow = createLogWindow();
         addWindow(logWindow);
 
@@ -37,12 +38,67 @@ public class MainApplicationFrame extends JFrame {
         gameWindow.setSize(400, 400);
         addWindow(gameWindow);
 
+        if (file.exists()) {
+            try (ObjectInputStream stream =
+                         new ObjectInputStream(new BufferedInputStream(new FileInputStream(file)))) {
+                settings = (Settings) stream.readObject();
+                JInternalFrame[] frames = desktopPane.getAllFrames();
+                HashSet<Settings> framesSettings = (HashSet<Settings>) stream.readObject();
+                for (Settings fs : framesSettings)
+                    for (JInternalFrame frame : frames) {
+                        if (frame.getTitle().equals(fs.getTitle())) {
+                            frame.setIcon(fs.isIconified());
+                            frame.setMaximum(fs.isMaximized());
+                            frame.setLocation(fs.getLocation());
+                            frame.setSize(fs.getDimension());
+                        }
+                    }
+            } catch (Exception e) {
+                System.out.println(e.getMessage());
+            }
+        } else settings = getMainFrameSettings();
+
+        if (settings.isIconified())
+            setExtendedState(ICONIFIED);
+        else if (settings.isMaximized())
+            setExtendedState(MAXIMIZED_BOTH);
+        setSize(settings.getDimension());
+        setLocation(settings.getLocation());
+
         setJMenuBar(generateMenuBar());
         setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
         addWindowListener(new WindowAdapter() {
             @Override
             public void windowClosing(WindowEvent e) {
                 closeWindow();
+            }
+
+            @Override
+            public void windowIconified(WindowEvent e) {
+                settings.setIconified(true);
+            }
+
+            @Override
+            public void windowDeiconified(WindowEvent e) {
+                settings.setIconified(false);
+                if (settings.isMaximized())
+                    setExtendedState(MAXIMIZED_BOTH);
+            }
+        });
+
+        addComponentListener(new ComponentAdapter() {
+            @Override
+            public void componentResized(ComponentEvent e) {
+                settings.setDimension(e.getComponent().getSize());
+                if (getExtendedState() == JFrame.MAXIMIZED_BOTH)
+                    settings.setMaximized(true);
+                else
+                    settings.setMaximized(false);
+            }
+
+            @Override
+            public void componentMoved(ComponentEvent e) {
+                settings.setLocation(e.getComponent().getLocation());
             }
         });
     }
@@ -64,12 +120,12 @@ public class MainApplicationFrame extends JFrame {
 
 //    protected JMenuBar createMenuBar() {
 //        JMenuBar menuBar = new JMenuBar();
-// 
+//
 //        //Set up the lone menu.
 //        JMenu menu = new JMenu("Document");
 //        menu.setMnemonic(KeyEvent.VK_D);
 //        menuBar.add(menu);
-// 
+//
 //        //Set up the first menu item.
 //        JMenuItem menuItem = new JMenuItem("New");
 //        menuItem.setMnemonic(KeyEvent.VK_N);
@@ -78,7 +134,7 @@ public class MainApplicationFrame extends JFrame {
 //        menuItem.setActionCommand("new");
 ////        menuItem.addActionListener(this);
 //        menu.add(menuItem);
-// 
+//
 //        //Set up the second menu item.
 //        menuItem = new JMenuItem("Quit");
 //        menuItem.setMnemonic(KeyEvent.VK_Q);
@@ -87,7 +143,7 @@ public class MainApplicationFrame extends JFrame {
 //        menuItem.setActionCommand("quit");
 ////        menuItem.addActionListener(this);
 //        menu.add(menuItem);
-// 
+//
 //        return menuBar;
 //    }
 
@@ -148,6 +204,20 @@ public class MainApplicationFrame extends JFrame {
         int reply = JOptionPane.showConfirmDialog(null,
                 "Вы действительно хотите закрыть приложение?", "Закрыть", JOptionPane.YES_NO_OPTION);
         if (reply == JOptionPane.YES_OPTION) {
+            try (ObjectOutputStream stream =
+                         new ObjectOutputStream(new BufferedOutputStream(new FileOutputStream(file)))) {
+                HashSet<Settings> framesSettings = new HashSet<>();
+                stream.writeObject(settings);
+                JInternalFrame[] frames = desktopPane.getAllFrames();
+                for (JInternalFrame frame : frames) {
+                    Settings frameSettings = new Settings(frame.getTitle(),
+                            frame.getSize(), frame.getLocation(), frame.isIcon(), frame.isMaximum());
+                    framesSettings.add(frameSettings);
+                }
+                stream.writeObject(framesSettings);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
             System.exit(0);
         }
     }
@@ -160,5 +230,10 @@ public class MainApplicationFrame extends JFrame {
                 | IllegalAccessException | UnsupportedLookAndFeelException e) {
             // just ignore
         }
+    }
+
+    private static Settings getMainFrameSettings() {
+        return new Settings("Main", Toolkit.getDefaultToolkit().getScreenSize(),
+                new Point(0, 0), false, true);
     }
 }
