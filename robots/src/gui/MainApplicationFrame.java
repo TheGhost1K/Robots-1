@@ -2,10 +2,6 @@ package gui;
 
 import java.awt.*;
 import java.awt.event.*;
-import java.io.*;
-import java.util.HashSet;
-
-
 import javax.swing.*;
 
 import log.Logger;
@@ -15,55 +11,32 @@ import log.Logger;
  * 1. Метод создания меню перегружен функционалом и трудно читается.
  * Следует разделить его на серию более простых методов (или вообще выделить отдельный класс).
  */
-public class MainApplicationFrame extends JFrame {
+public class MainApplicationFrame extends Save {
     private final JDesktopPane desktopPane = new JDesktopPane();
-    private Settings settings;
-    private File file = new File(System.getProperty("user.home") + "/Settings.txt");
 
     public MainApplicationFrame() {
         //Make the big window be indented 50 pixels from each edge
         //of the screen.
+        settings = getMainFrameSettings();
         int inset = 50;
+
         Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
         setBounds(inset, inset,
                 screenSize.width - inset * 2,
                 screenSize.height - inset * 2);
 
         setContentPane(desktopPane);
+        Store.addComponentInStore(this);
 
         LogWindow logWindow = createLogWindow();
         addWindow(logWindow);
+        Store.addComponentInStore(logWindow);
 
         GameWindow gameWindow = new GameWindow();
         gameWindow.setSize(400, 400);
         addWindow(gameWindow);
-
-        if (file.exists()) {
-            try (ObjectInputStream stream =
-                         new ObjectInputStream(new BufferedInputStream(new FileInputStream(file)))) {
-                settings = (Settings) stream.readObject();
-                JInternalFrame[] frames = desktopPane.getAllFrames();
-                HashSet<Settings> framesSettings = (HashSet<Settings>) stream.readObject();
-                for (Settings fs : framesSettings)
-                    for (JInternalFrame frame : frames) {
-                        if (frame.getTitle().equals(fs.getTitle())) {
-                            frame.setIcon(fs.isIconified());
-                            frame.setMaximum(fs.isMaximized());
-                            frame.setLocation(fs.getLocation());
-                            frame.setSize(fs.getDimension());
-                        }
-                    }
-            } catch (Exception e) {
-                System.out.println(e.getMessage());
-            }
-        } else settings = getMainFrameSettings();
-
-        if (settings.isIconified())
-            setExtendedState(ICONIFIED);
-        else if (settings.isMaximized())
-            setExtendedState(MAXIMIZED_BOTH);
-        setSize(settings.getDimension());
-        setLocation(settings.getLocation());
+        Store.addComponentInStore(gameWindow);
+        Store.loadSettings();
 
         setJMenuBar(generateMenuBar());
         setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
@@ -71,34 +44,6 @@ public class MainApplicationFrame extends JFrame {
             @Override
             public void windowClosing(WindowEvent e) {
                 closeWindow();
-            }
-
-            @Override
-            public void windowIconified(WindowEvent e) {
-                settings.setIconified(true);
-            }
-
-            @Override
-            public void windowDeiconified(WindowEvent e) {
-                settings.setIconified(false);
-                if (settings.isMaximized())
-                    setExtendedState(MAXIMIZED_BOTH);
-            }
-        });
-
-        addComponentListener(new ComponentAdapter() {
-            @Override
-            public void componentResized(ComponentEvent e) {
-                settings.setDimension(e.getComponent().getSize());
-                if (getExtendedState() == JFrame.MAXIMIZED_BOTH)
-                    settings.setMaximized(true);
-                else
-                    settings.setMaximized(false);
-            }
-
-            @Override
-            public void componentMoved(ComponentEvent e) {
-                settings.setLocation(e.getComponent().getLocation());
             }
         });
     }
@@ -148,8 +93,6 @@ public class MainApplicationFrame extends JFrame {
 //    }
 
     private JMenuBar generateMenuBar() {
-        JMenuBar menuBar = new JMenuBar();
-
         JMenu lookAndFeelMenu = new JMenu("Режим отображения");
         lookAndFeelMenu.setMnemonic(KeyEvent.VK_V);
         lookAndFeelMenu.getAccessibleContext().setAccessibleDescription(
@@ -187,6 +130,7 @@ public class MainApplicationFrame extends JFrame {
         }
 
         {
+            JMenuBar menuBar = new JMenuBar();
             JMenuItem exitButton = new JMenuItem("Закрыть приложение");
             UIManager.put("OptionPane.yesButtonText", "Да");
             UIManager.put("OptionPane.noButtonText", "Нет");
@@ -204,20 +148,7 @@ public class MainApplicationFrame extends JFrame {
         int reply = JOptionPane.showConfirmDialog(null,
                 "Вы действительно хотите закрыть приложение?", "Закрыть", JOptionPane.YES_NO_OPTION);
         if (reply == JOptionPane.YES_OPTION) {
-            try (ObjectOutputStream stream =
-                         new ObjectOutputStream(new BufferedOutputStream(new FileOutputStream(file)))) {
-                HashSet<Settings> framesSettings = new HashSet<>();
-                stream.writeObject(settings);
-                JInternalFrame[] frames = desktopPane.getAllFrames();
-                for (JInternalFrame frame : frames) {
-                    Settings frameSettings = new Settings(frame.getTitle(),
-                            frame.getSize(), frame.getLocation(), frame.isIcon(), frame.isMaximum());
-                    framesSettings.add(frameSettings);
-                }
-                stream.writeObject(framesSettings);
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
+            Store.saveSettings();
             System.exit(0);
         }
     }
