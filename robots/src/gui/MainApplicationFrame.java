@@ -131,10 +131,7 @@ public class MainApplicationFrame extends Save {
 
         {
             JMenuBar menuBar = new JMenuBar();
-            JMenuItem exitButton = new JMenuItem("Закрыть приложение");
-            UIManager.put("OptionPane.yesButtonText", "Да");
-            UIManager.put("OptionPane.noButtonText", "Нет");
-            exitButton.addActionListener(event -> closeWindow());
+            JMenuItem exitButton = getExitButton();
             JMenu exitMenu = new JMenu("Закрыть приложение");
             exitMenu.add(exitButton);
             menuBar.add(lookAndFeelMenu);
@@ -142,6 +139,14 @@ public class MainApplicationFrame extends Save {
             menuBar.add(exitMenu);
             return menuBar;
         }
+    }
+
+    private JMenuItem getExitButton() {
+        JMenuItem exitButton = new JMenuItem("Закрыть приложение");
+        UIManager.put("OptionPane.yesButtonText", "Да");
+        UIManager.put("OptionPane.noButtonText", "Нет");
+        exitButton.addActionListener(event -> closeWindow());
+        return exitButton;
     }
 
     private void closeWindow() {
